@@ -30,6 +30,12 @@ y = ticks$amblyomma_americanum
 time = ticks$mmwrWeek
 siteID = ticks$siteID
 
+data <- list(y=log(y+1),n=length(y), nsite = length(unique(siteID)),## data
+             x_ic=log(1000),tau_ic=100, ## initial condition prior
+             a_obs=1,r_obs=1,           ## obs error prior
+             a_add=1,r_add=1            ## process error prior
+)
+
 # random walk 
 RandomWalk = "
 model{
@@ -37,13 +43,13 @@ model{
   #### Data Model
   for(t in 1:n){
 
-    y[t] ~ dnorm(x[t],tau_obs) #t different y's (observations) and they are a function of x
+    y[t] ~ dpois(x[t]) #t different y's (observations) and they are a function of x
   }
   
   
   #### Process Model
   for(t in 2:n){
-    x[t]~dnorm(x[t-1],tau_add)
+    x[t]~pois(x[t-1])
   }
   
   #### Priors
@@ -52,13 +58,6 @@ model{
   tau_add ~ dgamma(a_add,r_add)
 }
 "
-
-data <- list(y=log(y+1),n=length(y), nsite = length(unique(siteID)),## data
-             x_ic=log(1000),tau_ic=100, ## initial condition prior
-             a_obs=1,r_obs=1,           ## obs error prior
-             a_add=1,r_add=1            ## process error prior
-)
-
 
 nchain = 3
 init <- list()
