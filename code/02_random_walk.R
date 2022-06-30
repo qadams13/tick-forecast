@@ -4,7 +4,7 @@ library(rjags)
 library(lubridate)
 #library(rnoaa)
 library(daymetr)
-devtools::install_github("EcoForecast/ecoforecastR",force=TRUE)
+#devtools::install_github("EcoForecast/ecoforecastR",force=TRUE)
 library(ecoforecastR)
 
 #Reading in data
@@ -30,32 +30,124 @@ y = ticks$amblyomma_americanum
 time = ticks$mmwrWeek
 siteID = ticks$siteID
 
-data <- list(y=log(y+1),n=length(y), nsite = length(unique(siteID)),## data
-             x_ic=log(1000),tau_ic=100, ## initial condition prior
+# x = matrix(nrow = length(unique(ticks$mmwrWeek)),
+#            ncol = length(unique(ticks$Year)))
+# years_vec = unique(ticks$Year)
+# week_vec = sort(unique(ticks$mmwrWeek))
+# for(i in 1:length(years_vec)){
+#   for(j in 1:length(week_vec)) {
+#     x[j,i] = ticks[which(ticks$mmwrWeek == week_vec[j] & 
+#                            ticks$amblyomma_americanum == years_vec[i]), 
+#                    "amblyomma_americanum"]
+#   }
+# }
+
+density = ticks$amblyomma_americanum
+years_vec = as.integer(as.factor(ticks$Year))
+site_id_vec = ticks$siteID
+week_vec = as.integer(as.factor(ticks$mmwrWeek))
+n_obs = length(density)
+x_rows = sort(unique(week_vec))
+x_cols = sort(unique(years_vec))
+
+sort(unique(week_vec))
+
+# create new df with NA's filled in 
+length_new_df = length(unique(ticks$mmwrWeek)) * 
+  length(unique(ticks$siteID)) * length(unique(ticks$Year))
+new_df = data.frame(
+  week = numeric(length = length_new_df),
+  year = numeric(length = length_new_df),
+  density = numeric(length = length_new_df),
+  site = character(length = length_new_df)
+)
+
+first_week = numeric(length = length(unique(ticks$Year)))
+last_week = numeric(length = length(unique(ticks$Year)))
+
+j = 1
+for(i in sort(unique(ticks$Year))) {
+  first_week[j] = min(
+    ticks[which(ticks$Year == i), "mmwrWeek"]
+  )
+  last_week[j] = max(
+    ticks[which(ticks$Year == i), "mmwrWeek"]
+  )
+  j = j + 1
+}
+
+year_iter = 1
+for(year in sort(unique(ticks$Year))) {
+  first = first_week[year_iter]
+  last = last_week[year_iter]
+  for(week in first:last) {
+    for(site in sort(unique(ticks$siteID))) {
+      
+      # check if value exists
+      value = ifelse(nrow(ticks[which(
+          ticks$mmwrWeek == week & 
+            ticks$Year == year &
+              ticks$siteID == site), ]) > 0, 
+          ticks[which(
+            ticks$mmwrWeek == week & 
+              ticks$Year == year &
+              ticks$siteID == site), "amblyomma_americanum"][[1]],
+          NA)
+      new_df[i, "week"] = as.numeric(week)
+      new_df[i, "site"] = site
+      new_df[i, "year"] = as.numeric(year)
+      new_df[i, "density"] = as.numeric(value)
+      i = i + 1
+    }
+  }
+}
+
+# test 
+week = unique(ticks$mmwrWeek)[1]
+site = unique(ticks$siteID)[1]
+year = unique(ticks$Year)[1]
+
+
+data <- list(y = new_df$density, 
+             years_vec,
+             site_id_vec,
+             week_vec,
+             n_obs,
+             x_ic_alpha = 1.5, 
+             x_beta=80, ## initial condition prior
              a_obs=1,r_obs=1,           ## obs error prior
              a_add=1,r_add=1            ## process error prior
 )
 
+# look at distribution of the data
+hist(ticks$amblyomma_americanum)
+
 # random walk 
 RandomWalk = "
 model{
-  
-  #### Data Model
-  for(t in 1:n){
 
-    y[t] ~ dpois(x[t]) #t different y's (observations) and they are a function of x
-  }
-  
-  
-  #### Process Model
-  for(t in 2:n){
-    x[t]~pois(x[t-1])
-  }
-  
   #### Priors
-  x[1] ~ dnorm(x_ic,tau_ic) #initial condition for the state 
   tau_obs ~ dgamma(a_obs,r_obs)
   tau_add ~ dgamma(a_add,r_add)
+  
+  #### Process Model
+  # loop for each year
+  for(i in unique(years_vec)) {
+        
+        x[1,i] ~ dgamma(x_ic_alpha, x_beta) # give the first value as the prior
+        alpha.y[i] ~ dnorm(0, tau_add)
+        
+    for(t in sort(unique(week_vec))[2:length(unique(week_vec))]) {
+      t in sort(unique(week_vec))[2:length(unique(week_vec)
+      log(x[t, i]) <- x[t-1, i] + alpha.y[i]
+    }
+  }
+  
+  #### Data Model
+  
+  for(i in 1:n_obs){
+      y[i] ~ dpois() #t different y's (observations) and they are a function of x
+  }
 }
 "
 
@@ -67,7 +159,7 @@ for(i in 1:nchain){
                     tau_obs=5/var(log(y.samp)))        ## initial guess on obs precision
 }
 
-j.model   <- jags.model (file = textConnection(RandomWalk),
+j.model <- jags.model(file = textConnection(RandomWalk),
                          data = data,
                          inits = init,
                          n.chains = 3)

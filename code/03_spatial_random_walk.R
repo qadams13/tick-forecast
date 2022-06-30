@@ -81,3 +81,55 @@ j.model = jags.model (file = textConnection(SpatialRandomWalk),
 jags.out   <- coda.samples (model = j.model,
                             variable.names = c("tau_add","tau_obs"),
                             n.iter = 1000)
+
+
+
+
+
+
+# create new df with NA's filled in 
+length_new_df = length(unique(ticks$mmwrWeek))  * length(unique(ticks$Year))
+new_df = data.frame(
+  week = numeric(length = 0),
+  year = numeric(length = 0),
+  density = numeric(length = 0),
+  site = character(length = 0)
+)
+
+i = 1
+for(week in sort(unique(ticks$mmwrWeek))) {
+  for(year in sort(unique(ticks$Year))) {
+    
+    if(nrow(ticks[which(
+      ticks$mmwrWeek == week & 
+      ticks$Year == year), ]) > 0) {
+      
+      # get temp df
+      temp_df = ticks[which(
+        ticks$mmwrWeek == week & 
+          ticks$Year == year), ]
+      
+      new_df = cbind(new_df, temp_df)
+    } else {
+      
+      
+      
+    }
+    
+    
+    # check if value exists
+    value = ifelse(nrow(ticks[which(
+      ticks$mmwrWeek == week & 
+        ticks$Year == year), ]) > 0, 
+      ticks[which(
+        ticks$mmwrWeek == week & 
+          ticks$Year == year), "amblyomma_americanum"][[1]],
+      NA)
+    new_df[i, "week"] = as.numeric(week)
+    new_df[i, "site"] = site
+    new_df[i, "year"] = as.numeric(year)
+    new_df[i, "density"] = as.numeric(value)
+    i = i + 1
+  }
+}
+}
